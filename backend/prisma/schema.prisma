@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum ContactPreference {
+  IN_PLATFORM_ONLY
+  SHOW_PHONE_OPTIONAL
+}
+
+enum PostType {
+  LOST
+  FOUND
+}
+
+enum PostStatus {
+  ACTIVE
+  RESOLVED
+  ARCHIVED
+  HIDDEN_BY_MODERATION
+}
+
+enum EventDateTimePrecision {
+  EXACT
+  APPROXIMATE
+}
+
+enum CatSex {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum CatAgeGroup {
+  KITTEN
+  ADULT
+  SENIOR
+  UNKNOWN
+}
+
+enum CatSize {
+  SMALL
+  MEDIUM
+  LARGE
+  UNKNOWN
+}
+
+enum CatFurLength {
+  SHORT
+  MEDIUM
+  LONG
+  UNKNOWN
+}
+
+enum CatPattern {
+  SOLID
+  TABBY
+  TUXEDO
+  CALICO
+  OTHER
+  UNKNOWN
+}
+
+enum TriState {
+  YES
+  NO
+  UNKNOWN
+}
+
+enum MessageThreadStatus {
+  OPEN
+  CLOSED
+}
+
+enum ReportTargetType {
+  POST
+  MESSAGE
+  USER
+}
+
+enum ReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+model User {
+  id                 String             @id @default(uuid())
+  email              String             @unique
+  password_hash      String
+  display_name       String
+  avatar_url         String?
+  phone              String?
+  contact_preference ContactPreference  @default(IN_PLATFORM_ONLY)
+  is_email_verified  Boolean            @default(false)
+  role               UserRole           @default(USER)
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  last_login_at      DateTime?
+
+  posts              Post[]
+  message_threads    MessageThread[]
+  messages           Message[]
+  reports            Report[]
+  audit_logs         AuditLog[]
+}
+
+model Post {
+  id                       String                @id @default(uuid())
+  type                     PostType
+  status                   PostStatus            @default(ACTIVE)
+  author_user_id           String
+  title                    String
+  description              String
+  event_datetime           DateTime
+  event_datetime_precision EventDateTimePrecision
+  latitude                 Float
+  longitude                Float
+  location_label           String
+  accuracy_radius_m        Int                  @default(500)
+  cat_name                 String?
+  cat_sex                  CatSex               @default(UNKNOWN)
+  cat_age_group            CatAgeGroup          @default(UNKNOWN)
+  cat_size                 CatSize              @default(UNKNOWN)
+  cat_fur_length           CatFurLength         @default(UNKNOWN)
+  primary_color            String
+  secondary_color          String?
+  pattern                  CatPattern           @default(UNKNOWN)
+  distinctive_marks        String?
+  chip_number              String?
+  passport_number          String?
+  is_neutered              Boolean?
+  health_notes             String?
+  found_is_sheltered       TriState?
+  found_needs_vet          TriState?
+  views_count              Int                  @default(0)
+  created_at               DateTime             @default(now())
+  updated_at               DateTime             @updatedAt
+  resolved_at              DateTime?
+
+  author                   User                 @relation(fields: [author_user_id], references: [id])
+  photos                   PostPhoto[]
+  message_threads          MessageThread[]
+  match_suggestions_lost   MatchSuggestion[]    @relation("LostPost")
+  match_suggestions_found  MatchSuggestion[]    @relation("FoundPost")
+
+  @@index([type, status, event_datetime(sort: Desc)])
+  @@index([chip_number])
+  @@index([latitude, longitude])
+}
+
+model PostPhoto {
+  id          String   @id @default(uuid())
+  post_id     String
+  storage_key String
+  thumb_url   String?
+  position    Int
+  width       Int?
+  height      Int?
+  created_at  DateTime @default(now())
+
+  post        Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+}
+
+model MessageThread {
+  id                   String              @id @default(uuid())
+  post_id              String
+  created_by_user_id   String
+  created_at           DateTime            @default(now())
+  status               MessageThreadStatus @default(OPEN)
+
+  post                 Post                @relation(fields: [post_id], references: [id])
+  created_by           User                @relation(fields: [created_by_user_id], references: [id])
+  messages             Message[]
+
+  @@index([post_id, created_at])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  thread_id      String
+  sender_user_id String
+  body           String
+  created_at     DateTime @default(now())
+  is_flagged     Boolean  @default(false)
+  flag_reason    String?
+
+  thread         MessageThread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+  sender         User          @relation(fields: [sender_user_id], references: [id])
+
+  @@index([thread_id, created_at])
+}
+
+model Report {
+  id               String           @id @default(uuid())
+  target_type      ReportTargetType
+  target_id        String
+  reporter_user_id String
+  reason           String
+  status           ReportStatus     @default(OPEN)
+  created_at       DateTime         @default(now())
+  resolved_at      DateTime?
+
+  reporter         User             @relation(fields: [reporter_user_id], references: [id])
+}
+
+model MatchSuggestion {
+  id             String   @id @default(uuid())
+  lost_post_id   String
+  found_post_id  String
+  score          Float
+  reasons        Json
+  created_at     DateTime @default(now())
+
+  lost_post      Post     @relation("LostPost", fields: [lost_post_id], references: [id])
+  found_post     Post     @relation("FoundPost", fields: [found_post_id], references: [id])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actor_user_id String
+  action        String
+  target_type   String
+  target_id     String
+  metadata      Json
+  created_at    DateTime @default(now())
+
+  actor         User     @relation(fields: [actor_user_id], references: [id])
+}
