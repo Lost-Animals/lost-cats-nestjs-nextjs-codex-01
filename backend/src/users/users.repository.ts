@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma, ContactPreference } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -9,7 +10,10 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  updateById(id: string, data: Partial<{ display_name: string; avatar_url: string; phone: string | null; contact_preference: string }>) {
+  updateById(
+    id: string,
+    data: Prisma.UserUpdateInput & { contact_preference?: ContactPreference }
+  ) {
     return this.prisma.user.update({ where: { id }, data });
   }
 }
